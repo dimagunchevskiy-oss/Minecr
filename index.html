@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MAP3D">
+  <meta name="description" content="3D Map Builder — строй карты и играй офлайн">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>MAP3D Builder</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    
+    :root {
+      --bg: #05050f;
+      --surface: #0d0d22;
+      --panel: rgba(10,10,30,0.92);
+      --border: rgba(80,120,255,0.25);
+      --accent: #4a7fff;
+      --accent2: #ff4a7f;
+      --accent3: #4aff9f;
+      --text: #c8d4ff;
+      --text-dim: #556080;
+      --glow: 0 0 20px rgba(74,127,255,0.4);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+      position: relative;
+    }
+
+    /* ── ЭКРАНЫ ── */
+    .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s; }
+    .screen.hidden { opacity: 0; pointer-events: none; }
+
+    /* ── ЗАСТАВКА ── */
+    #splash {
+      background: radial-gradient(ellipse at 50% 40%, #0d1a4a 0%, #05050f 70%);
+      gap: 24px;
+    }
+    .logo-wrap { position: relative; }
+    .logo-grid {
+      display: grid; grid-template-columns: repeat(4,1fr); gap: 4px;
+      width: 100px; height: 100px; margin: 0 auto 16px;
+      animation: logoSpin 6s linear infinite;
+    }
+    .logo-grid div {
+      border-radius: 4px;
+      animation: logoPulse 2s ease-in-out infinite alternate;
+    }
+    @keyframes logoSpin { from{transform:rotateY(0)} to{transform:rotateY(360deg)} }
+    @keyframes logoPulse { from{opacity:0.3} to{opacity:1} }
+    .logo-title {
+      font-size: 42px; font-weight: 900; letter-spacing: 8px;
+      background: linear-gradient(135deg, #4a7fff, #ff4a7f, #4aff9f);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+    .logo-sub { font-size: 11px; letter-spacing: 4px; color: var(--text-dim); text-transform: uppercase; }
+    .btn-primary {
+      background: linear-gradient(135deg, #1a2fff, #7a2fff);
+      border: 1px solid rgba(100,150,255,0.4);
+      color: #fff; font-family: 'Courier New', monospace;
+      font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+      padding: 16px 40px; border-radius: 4px; cursor: pointer;
+      box-shadow: 0 0 30px rgba(74,127,255,0.3);
+      transition: all 0.2s; -webkit-appearance: none;
+      margin-top: 8px;
+    }
+    .btn-primary:active { transform: scale(0.96); box-shadow: 0 0 10px rgba(74,127,255,0.2); }
+    .btn-secondary {
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: 'Courier New', monospace;
+      font-size: 12px; letter-spacing: 2px; padding: 12px 32px;
+      border-radius: 4px; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-secondary:active { background: rgba(74,127,255,0.1); }
+    .saved-maps { display: flex; flex-direction: column; gap: 8px; width: 80%; max-width: 300px; }
+    .saved-map-item {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 4px; padding: 12px 16px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: all 0.2s;
+    }
+    .saved-map-item:active { background: rgba(74,127,255,0.1); }
+    .saved-map-name { font-size: 13px; color: var(--text); }
+    .saved-map-info { font-size: 10px; color: var(--text-dim); }
+    .section-label { font-size: 10px; letter-spacing: 3px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+
+    /* ── РЕДАКТОР ── */
+    #editor { flex-direction: column; justify-content: flex-start; background: var(--bg); }
+
+    canvas#c {
+      display: block; width: 100vw;
+      touch-action: none;
+      flex-shrink: 0;
+    }
+
+    /* ── НИЖНЯЯ ПАНЕЛЬ ── */
+    #bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--panel); border-top: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      padding: 0 0 env(safe-area-inset-bottom);
+      z-index: 100; display: flex; flex-direction: column;
+    }
+    .tabs {
+      display: flex; border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      flex: 1; padding: 10px 4px; text-align: center;
+      font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--text-dim); cursor: pointer; transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+    .tab-panel { display: none; padding: 10px 12px; }
+    .tab-panel.active { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* ── ФИГУРЫ ── */
+    .shape-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px; cursor: pointer; min-width: 56px;
+      transition: all 0.15s; color: var(--text-dim); font-size: 9px;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .shape-btn:active, .shape-btn.active { 
+      background: rgba(74,127,255,0.15); border-color: var(--accent);
+      color: var(--accent); box-shadow: 0 0 12px rgba(74,127,255,0.2);
+    }
+    .shape-icon { font-size: 22px; }
+
+    /* ── ЦВЕТА ── */
+    .color-swatch {
+      width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+      border: 3px solid transparent; transition: all 0.15s;
+    }
+    .color-swatch.active { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 12px rgba(255,255,255,0.3); }
+    .color-swatch:active { transform: scale(0.9); }
+
+    /* ── РАЗМЕРЫ ── */
+    .size-control { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 100px; }
+    .size-label { font-size: 9px; letter-spacing: 1.5px; color: var(--text-dim); display: flex; justify-content: space-between; }
+    input[type=range] {
+      -webkit-appearance: none; width: 100%; height: 4px;
+      background: rgba(74,127,255,0.2); border-radius: 2px; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      background: var(--accent); border-radius: 50%;
+      box-shadow: 0 0 8px rgba(74,127,255,0.5);
+    }
+
+    /* ── ВЕРХНЯЯ ПАНЕЛЬ ── */
+    #top-bar {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: var(--panel); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px); padding: 8px 12px;
+      padding-top: calc(8px + env(safe-area-inset-top));
+      display: flex; align-items: center; gap: 8px; z-index: 100;
+    }
+    .map-name-input {
+      flex: 1; background: transparent; border: none;
+      color: var(--text); font-family: 'Courier New', monospace;
+      font-size: 13px; letter-spacing: 2px; outline: none;
+    }
+    .icon-btn {
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 6px; cursor: pointer; font-size: 16px; transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .icon-btn:active { background: rgba(74,127,255,0.15); border-color: var(--accent); }
+
+    /* ── РЕЖИМ ИГРЫ ── */
+    #play-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: transparent; pointer-events: none; display: none;
+    }
+    #play-overlay.active { pointer-events: auto; display: block; }
+    #play-hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: var(--panel); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      padding: 8px 16px; padding-top: calc(8px + env(safe-area-inset-top));
+      display: none; align-items: center; justify-content: space-between;
+      z-index: 201;
+    }
+    #play-hud.active { display: flex; }
+    .hud-info { font-size: 11px; letter-spacing: 2px; color: var(--accent); }
+
+    /* ── ДЖОЙСТИК ── */
+    #joystick-zone {
+      position: fixed; bottom: calc(16px + env(safe-area-inset-bottom));
+      left: 16px; width: 120px; height: 120px;
+      display: none; z-index: 202;
+    }
+    #joystick-zone.active { display: block; }
+    .joystick-base {
+      width: 100%; height: 100%; border-radius: 50%;
+      background: rgba(74,127,255,0.08); border: 1px solid rgba(74,127,255,0.2);
+      position: relative;
+    }
+    .joystick-thumb {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: radial-gradient(circle, #4a7fff, #1a3fff);
+      box-shadow: 0 0 16px rgba(74,127,255,0.5);
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      transition: box-shadow 0.1s;
+    }
+    #action-btns {
+      position: fixed; bottom: calc(16px + env(safe-area-inset-bottom));
+      right: 16px; display: none; flex-direction: column; gap: 10px; z-index: 202;
+    }
+    #action-btns.active { display: flex; }
+    .action-btn {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+      font-size: 20px; cursor: pointer; transition: all 0.1s;
+      backdrop-filter: blur(8px);
+    }
+    .action-btn:active { transform: scale(0.9); }
+    #btn-jump { background: rgba(74,127,255,0.15); }
+    #btn-run { background: rgba(255,74,127,0.15); }
+
+    /* ── УВЕДОМЛЕНИЕ ── */
+    #toast {
+      position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      background: rgba(74,127,255,0.9); color: #fff; font-size: 12px; letter-spacing: 2px;
+      padding: 10px 20px; border-radius: 4px; z-index: 300;
+      opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── МЕНЮ ── */
+    #menu-overlay {
+      position: fixed; inset: 0; z-index: 400; background: rgba(5,5,15,0.95);
+      backdrop-filter: blur(20px); display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+    }
+    #menu-overlay.active { display: flex; }
+    .menu-title { font-size: 24px; letter-spacing: 6px; color: var(--accent); margin-bottom: 8px; }
+    .menu-btn {
+      width: 240px; padding: 14px; text-align: center;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 4px; cursor: pointer; font-family: 'Courier New', monospace;
+      font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text); transition: all 0.2s;
+    }
+    .menu-btn:active { background: rgba(74,127,255,0.15); border-color: var(--accent); color: var(--accent); }
+    .menu-btn.danger { color: var(--accent2); border-color: rgba(255,74,127,0.3); }
+    .menu-btn.danger:active { background: rgba(255,74,127,0.1); }
+
+    /* ── РЕЗИНОВЫЕ РУЧКИ ── */
+    .transform-handle {
+      position: absolute; background: #fff; border-radius: 50%;
+      pointer-events: none; z-index: 50;
+    }
+
+    /* ── СЕТКА ЗЕМЛИ ── */
+    #grid-toggle { }
+  </style>
+</head>
+<body>
+
+<!-- ЗАСТАВКА -->
+<div class="screen" id="splash">
+  <div class="logo-wrap">
+    <div class="logo-grid" id="logoGrid"></div>
+    <div class="logo-title">MAP3D</div>
+    <div class="logo-sub">Builder · Player · Explorer</div>
+  </div>
+  <button class="btn-primary" onclick="newMap()">+ Новая карта</button>
+  <div id="saved-section" style="display:none; flex-direction:column; align-items:center; gap:8px; width:80%; max-width:300px;">
+    <div class="section-label">Мои карты</div>
+    <div class="saved-maps" id="savedList"></div>
+  </div>
+</div>
+
+<!-- РЕДАКТОР -->
+<div class="screen hidden" id="editor">
+  <!-- Верхняя панель -->
+  <div id="top-bar">
+    <div class="icon-btn" onclick="showMenu()">☰</div>
+    <input class="map-name-input" id="mapName" value="Моя карта" placeholder="Название карты">
+    <div class="icon-btn" onclick="undoAction()" title="Отменить">↩</div>
+    <div class="icon-btn" onclick="playMode()" title="Играть" style="color:var(--accent3)">▶</div>
+  </div>
+
+  <!-- 3D Канвас -->
+  <canvas id="c"></canvas>
+
+  <!-- Нижняя панель инструментов -->
+  <div id="bottom-bar">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('shapes')"><span class="tab-icon">⬡</span>Фигуры</div>
+      <div class="tab" onclick="switchTab('colors')"><span class="tab-icon">◉</span>Цвет</div>
+      <div class="tab" onclick="switchTab('size')"><span class="tab-icon">⤢</span>Размер</div>
+      <div class="tab" onclick="switchTab('tools')"><span class="tab-icon">⚙</span>Режим</div>
+    </div>
+
+    <!-- Фигуры -->
+    <div class="tab-panel active" id="panel-shapes">
+      <div class="shape-btn active" onclick="selectShape('box')" id="shape-box">
+        <span class="shape-icon">⬛</span><span>Куб</span>
+      </div>
+      <div class="shape-btn" onclick="selectShape('sphere')" id="shape-sphere">
+        <span class="shape-icon">⚫</span><span>Сфера</span>
+      </div>
+      <div class="shape-btn" onclick="selectShape('cylinder')" id="shape-cylinder">
+        <span class="shape-icon">🥛</span><span>Цилинд</span>
+      </div>
+      <div class="shape-btn" onclick="selectShape('cone')" id="shape-cone">
+        <span class="shape-icon">▲</span><span>Конус</span>
+      </div>
+      <div class="shape-btn" onclick="selectShape('ramp')" id="shape-ramp">
+        <span class="shape-icon">📐</span><span>Рампа</span>
+      </div>
+      <div class="shape-btn" onclick="selectShape('torus')" id="shape-torus">
+        <span class="shape-icon">💿</span><span>Торус</span>
+      </div>
+    </div>
+
+    <!-- Цвета -->
+    <div class="tab-panel" id="panel-colors">
+      <div class="color-swatch active" style="background:#4a7fff" onclick="selectColor('#4a7fff')" data-c="#4a7fff"></div>
+      <div class="color-swatch" style="background:#ff4a7f" onclick="selectColor('#ff4a7f')" data-c="#ff4a7f"></div>
+      <div class="color-swatch" style="background:#4aff9f" onclick="selectColor('#4aff9f')" data-c="#4aff9f"></div>
+      <div class="color-swatch" style="background:#ffcc4a" onclick="selectColor('#ffcc4a')" data-c="#ffcc4a"></div>
+      <div class="color-swatch" style="background:#ff6a4a" onclick="selectColor('#ff6a4a')" data-c="#ff6a4a"></div>
+      <div class="color-swatch" style="background:#cc4aff" onclick="selectColor('#cc4aff')" data-c="#cc4aff"></div>
+      <div class="color-swatch" style="background:#ffffff" onclick="selectColor('#ffffff')" data-c="#ffffff"></div>
+      <div class="color-swatch" style="background:#888899" onclick="selectColor('#888899')" data-c="#888899"></div>
+      <div class="color-swatch" style="background:#2a1a0a" onclick="selectColor('#2a1a0a')" data-c="#2a1a0a"></div>
+    </div>
+
+    <!-- Размер -->
+    <div class="tab-panel" id="panel-size">
+      <div class="size-control">
+        <div class="size-label"><span>ШИРИНА</span><span id="vW">1.0</span></div>
+        <input type="range" id="slW" min="0.2" max="5" step="0.1" value="1" oninput="updateSize()">
+      </div>
+      <div class="size-control">
+        <div class="size-label"><span>ВЫСОТА</span><span id="vH">1.0</span></div>
+        <input type="range" id="slH" min="0.2" max="5" step="0.1" value="1" oninput="updateSize()">
+      </div>
+      <div class="size-control">
+        <div class="size-label"><span>ГЛУБИНА</span><span id="vD">1.0</span></div>
+        <input type="range" id="slD" min="0.2" max="5" step="0.1" value="1" oninput="updateSize()">
+      </div>
+    </div>
+
+    <!-- Режим -->
+    <div class="tab-panel" id="panel-tools">
+      <div class="shape-btn active" onclick="selectTool('add')" id="tool-add">
+        <span class="shape-icon">➕</span><span>Добавить</span>
+      </div>
+      <div class="shape-btn" onclick="selectTool('select')" id="tool-select">
+        <span class="shape-icon">👆</span><span>Выбрать</span>
+      </div>
+      <div class="shape-btn" onclick="selectTool('move')" id="tool-move">
+        <span class="shape-icon">✋</span><span>Двигать</span>
+      </div>
+      <div class="shape-btn" onclick="selectTool('delete')" id="tool-delete">
+        <span class="shape-icon">🗑️</span><span>Удалить</span>
+      </div>
+      <div class="shape-btn" onclick="deleteSelected()" style="border-color:rgba(255,74,127,0.4)">
+        <span class="shape-icon">❌</span><span>Удалить</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ИГРОВОЙ РЕЖИМ -->
+<div id="play-hud" class="">
+  <div class="hud-info">▶ РЕЖИМ ИГРЫ</div>
+  <div class="hud-info" id="playerPos">0,0,0</div>
+  <div class="icon-btn" onclick="stopPlay()" style="color:var(--accent2)">✕</div>
+</div>
+
+<div id="joystick-zone" class="">
+  <div class="joystick-base" id="jBase">
+    <div class="joystick-thumb" id="jThumb"></div>
+  </div>
+</div>
+
+<div id="action-btns" class="">
+  <div class="action-btn" id="btn-jump" ontouchstart="doJump()">↑</div>
+  <div class="action-btn" id="btn-run">⚡</div>
+</div>
+
+<div id="play-overlay"></div>
+
+<!-- МЕНЮ -->
+<div id="menu-overlay">
+  <div class="menu-title">МЕНЮ</div>
+  <div class="menu-btn" onclick="saveMap()">💾 Сохранить карту</div>
+  <div class="menu-btn" onclick="exportMap()">📤 Экспорт JSON</div>
+  <div class="menu-btn" onclick="importMapTrigger()">📥 Импорт JSON</div>
+  <div class="menu-btn" onclick="clearMap()" class="danger">🗑 Очистить всё</div>
+  <div class="menu-btn danger" onclick="goHome()">← Главная</div>
+  <div class="menu-btn" onclick="hideMenu()" style="margin-top:8px">✕ Закрыть</div>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importMap(event)">
+</div>
+
+<!-- УВЕДОМЛЕНИЕ -->
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
